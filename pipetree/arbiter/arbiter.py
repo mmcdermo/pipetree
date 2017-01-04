@@ -84,6 +84,7 @@ class LocalArbiter(ArbiterBase):
         We do this by generating stages for all input sources,
         Then waiting for their completion.
         Once we have the artifacts from their completion, we can
+
         call set_result on the future.
         """
         for input_stage in input_future._input_sources:

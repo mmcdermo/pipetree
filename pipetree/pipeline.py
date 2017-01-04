@@ -114,7 +114,6 @@ class Pipeline(object):
 
             # Wait until the associated futures have been setup
             artifactChunks = yield from input_future.await_artifacts()
-
             artifacts = []
             for artifactChunk in artifactChunks:
                 artifacts += artifactChunk

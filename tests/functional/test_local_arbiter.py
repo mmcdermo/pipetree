@@ -70,6 +70,5 @@ class TestLocalArbiter(unittest.TestCase):
         arbiter = LocalArbiter(os.path.join(".", self.config_filename))
         arbiter.run_event_loop(close_after=5.0)
         final_artifacts = arbiter.await_run_complete()
-        print(final_artifacts)
         print(final_artifacts[0].payload)
         pass

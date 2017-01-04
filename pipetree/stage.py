@@ -19,7 +19,9 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import os
 import inspect
+import importlib.util
 from pipetree.storage import LocalDirectoryArtifactProvider,\
     LocalFileArtifactProvider,\
     ParameterArtifactProvider
@@ -155,6 +157,7 @@ class IdentityPipelineStage(BasePipelineStage):
     def _validate_config(self, config):
         return True
 
+
 class LocalDirectoryPipelineStage(BasePipelineStage):
     """A pipeline stage for sourcing files from a directory"""
 
@@ -170,8 +173,8 @@ class LocalDirectoryPipelineStage(BasePipelineStage):
     def _source_artifact(self, artifact_name):
         pass
 
-    def _yield_artifacts(self):
-        pass
+    def _yield_artifacts(self, *args, **kwargs):
+        return self._artifact_source.yield_artifacts()
 
     def _validate_config(self, config):
         """
@@ -187,6 +190,21 @@ class LocalDirectoryPipelineStage(BasePipelineStage):
 class ExecutorPipelineStage(BasePipelineStage):
     def __init__(self, config):
         super().__init__(config)
+        self._module = None
+        self._callable = None
+        self._fn = None
+        self._load_module(config)
+
+    def _load_module(self, config):
+        path = os.path.join(*config.execute.split('.')[:-1]) + '.py'
+        print(path)
+        spec = importlib.util.spec_from_file_location(
+            config.name,
+            path)
+        self._module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self._module)
+        self._callable = config.execute.split('.')[-1]
+        self._fn = getattr(self._module, self._callable)
 
     def validate_prereqs(self, previous_stages):
         for input in self.inputs:
@@ -199,8 +217,8 @@ class ExecutorPipelineStage(BasePipelineStage):
     def _source_artifact(self, artifact_name):
         pass
 
-    def _yield_artifacts(self):
-        pass
+    def yield_artifacts(self, input_artifacts=None):
+        yield from self._fn()
 
     def _validate_config(self, config):
         if not hasattr(config, 'inputs'):
