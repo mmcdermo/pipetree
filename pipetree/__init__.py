@@ -12,3 +12,4 @@ STAGES = {
 }
 
 from pipetree.pipeline import Pipeline
+from pipetree.artifact import Item
