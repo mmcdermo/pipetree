@@ -76,7 +76,7 @@ class Pipeline(object):
     def _build_chain(self, stage_name, level=0, chain=None):
         if chain is None:
             chain = DependencyChain(stage_name)
-            self._build_chain(stage_name, level+1, chain)
+            self._build_chain(stage_name, level + 1, chain)
             return chain
         stage = self._stages[stage_name]
         if not hasattr(stage, 'inputs'):
@@ -92,15 +92,17 @@ class Pipeline(object):
         # Create an input future for each input to this function
         pre_reqs = chain.get_level(1)
 
-        print("Generating stage "+stage_name)
+        print("Generating stage %s" % stage_name)
         if pre_reqs is None or len(pre_reqs) == 0:
             # This stage does not need to make futures based on inputs
             # just write some result somewhere who knows wtf is going on
-            print("No inputs needed for stage "+stage_name)
+            print("No inputs needed for stage %s" % stage_name)
             artifacts = []
-            for art in self._stages[stage_name]._yield_artifacts():
-                print("Yielded an artifact without getting any inputs")
+            res = self._stages[stage_name]._yield_artifacts()
+            for art in res:
+                print("Yielding an artifact from stage %s" % stage_name)
                 artifacts.append(art)
+            print("Stage Complete: %s" % stage_name)
             return artifacts
         else:
             # This is when we do need to schedule a future with the arbiter
@@ -112,31 +114,25 @@ class Pipeline(object):
 
             # Wait until the associated futures have been setup
             artifactChunks = yield from input_future.await_artifacts()
-            print("Artifact chunks yielded")
+
             artifacts = []
             for artifactChunk in artifactChunks:
                 artifacts += artifactChunk
 
-            print("ARTIFACTS ACQUIRED AS INPUT FOR STAGE "+stage_name)
-            print(artifacts)
+            print("All (%d) inputs acquired for stage %s" %
+                  (len(artifacts), stage_name))
 
-            """
-            # Wait on the input artifact futures to resolve
-            artifacts = []
-            for future in input_future._associated_futures:
-                result = yield from future
-                artifacts.append(result)
-            """
-
-            # Now feed their result to the executor, returning generated artifacts
+            # Now feed their result to the executor,
+            # returning generated artifacts
             # For now we'll ignore this, and just execute the stage.
             found_stage = self._stages[stage_name]
             result = []
             for art in found_stage._yield_artifacts(input_artifacts=artifacts):
                 print("Yielded an artifact after getting input artifacts")
                 result.append(art)
+            print("Done generating stage %s" % stage_name)
             return result
-            print("Done generating stage "+stage_name)
+
     @property
     def stages(self):
         return self._stages

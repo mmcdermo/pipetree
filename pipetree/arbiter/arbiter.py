@@ -22,6 +22,8 @@
 import click
 import signal
 import asyncio
+import threading
+import time
 from pipetree.arbiter.executor import ExecutorTask, LocalCPUExecutor
 from pipetree.pipeline import PipelineFactory
 from concurrent.futures import CancelledError
@@ -35,15 +37,31 @@ class ArbiterBase(object):
         self._queue = asyncio.Queue(loop=self._loop)
         self._pipeline.set_arbiter_queue(self._queue)
 
+        self._final_artifacts = []
+        self._run_complete = False
+        self._lock = threading.Lock()
+
+    def await_run_complete(self):
+        while True:
+            with self._lock:
+                if self._run_complete is True:
+                    break
+            time.sleep(0.25)
+        return self._final_artifacts
+
     @asyncio.coroutine
     def _evaluate_pipeline(self):
         for name in self._pipeline.endpoints:
-            print("ENDPOINTS")
+            print("Evaluating pipeline endpoints:")
             print(self._pipeline.endpoints)
-            yield from self._pipeline.generate_stage(
+            x = yield from self._pipeline.generate_stage(
                 name,
                 self.enqueue,
                 self._default_executor)
+            with self._lock:
+                self._final_artifacts += x
+        with self._lock:
+            self._run_complete = True
 
     def enqueue(self, obj):
         self._queue.put_nowait(obj)
@@ -66,17 +84,12 @@ class LocalArbiter(ArbiterBase):
         We do this by generating stages for all input sources,
         Then waiting for their completion.
         Once we have the artifacts from their completion, we can
-        call set_result on the future. 
+        call set_result on the future.
         """
-        print("RESOLVE FUTURE")
-        result_artifacts = []
-        print("Associated futures: ")
-        print(input_future._associated_futures)
-
         for input_stage in input_future._input_sources:
             input_future.add_associated_future(asyncio.ensure_future(
                 self._pipeline.generate_stage(
-                    input_stage, 
+                    input_stage,
                     self.enqueue,
                     self._local_cpu_executor
                 )))
@@ -105,12 +118,10 @@ class LocalArbiter(ArbiterBase):
         if num_seconds is None:
             return
         yield from asyncio.sleep(num_seconds)
-        print("CLOSING")
         self.shutdown()
         self._loop.close()
 
     def shutdown(self):
-        print("SHUTDOWN HAPPENING")
         for task in asyncio.Task.all_tasks():
             task.cancel()
 
@@ -119,10 +130,9 @@ class LocalArbiter(ArbiterBase):
         self._loop.add_signal_handler(signal.SIGINT, self.shutdown)
         self._loop.add_signal_handler(signal.SIGTERM, self.shutdown)
 
-        
         try:
             self._loop.run_until_complete(asyncio.wait([
-                self._close_after(close_after),                
+                self._close_after(close_after),
                 self._main(),
                 self._listen_to_queue()
             ]))

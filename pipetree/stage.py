@@ -102,7 +102,8 @@ class LocalFilePipelineStage(BasePipelineStage):
         pass
 
     def _yield_artifacts(self, input_artifacts=None):
-        return self._artifact_source.yield_artifacts()
+        for art in self._artifact_source.yield_artifacts():
+            yield art
 
     def _validate_config(self, config):
         """
@@ -115,72 +116,44 @@ class LocalFilePipelineStage(BasePipelineStage):
         return True
 
 
-class ParameterPipelineStage(BasePipelineStage):
-    """A pipeline stage for fixed parameters"""
+class IdentityPipelineStage(BasePipelineStage):
+    """A pipeline stage that returns its inputs exactly"""
 
     def __init__(self, config):
         super().__init__(config)
 
-        params = self.params_from_config(config)
-        self._artifact_source = ParameterArtifactProvider(
-            stage_config=config,
-            parameters=params)
-
-    def params_from_config(self, config):
-        """ Extract parameters from a config"""
-        exclude = ['type']
-        params = {}
-        for prop in dir(config):
-            value = getattr(config, prop)
-            if not prop.startswith('__') and not inspect.ismethod(value)\
-               and prop not in exclude:
-                params[prop] = value
-        return params
-
     def validate_prereqs(self, previous_stages):
+        for input in self.inputs:
+            if input not in previous_stages.keys():
+                raise InvalidConfigurationFileError(
+                    configurable=self.__class__.__name__,
+                    reason='input stage \'%s\' not found in pipeline' % input)
         return True
-
-    def _source_artifact(self, artifact_name):
-        pass
-
-    def _yield_artifacts(self):
-        pass
 
     def _validate_config(self, config):
-        """
-        Raise an exception if the config is invald
-        """
-        return True
-
-
-class LocalFilePipelineStage(BasePipelineStage):
-    """A pipeline stage for sourcing a single file locally"""
-
-    def __init__(self, config):
-        super().__init__(config)
-        self._artifact_source = LocalFileArtifactProvider(
-            path=config.filepath,
-            stage_config=config)
-
-    def validate_prereqs(self, previous_stages):
-        return True
-
-    def _source_artifact(self, artifact_name):
-        pass
-
-    def _yield_artifacts(self):
-        pass
-
-    def _validate_config(self, config):
-        """
-        Raise an exception if the config is invald
-        """
-        if not hasattr(config, 'filepath'):
+        if not hasattr(config, 'inputs'):
             raise InvalidConfigurationFileError(
                 configurable=self.__class__.__name__,
-                reason='expected \'filepath\' entry of type string.')
+                reason='expected \'input\' entry of type array')
+        if not isinstance(config.inputs, list):
+            raise InvalidConfigurationFileError(
+                configurable=self.__class__.__name__,
+                reason='expected \'input\' to be an array, found a %s'
+                % type(config.inputs))
         return True
 
+    def validate_prereqs(self, previous_stages):
+        return True
+
+    def _source_artifact(self, artifact_name):
+        pass
+
+    def _yield_artifacts(self, input_artifacts):
+        for artifact in input_artifacts:
+            yield artifact
+
+    def _validate_config(self, config):
+        return True
 
 class LocalDirectoryPipelineStage(BasePipelineStage):
     """A pipeline stage for sourcing files from a directory"""
@@ -197,8 +170,8 @@ class LocalDirectoryPipelineStage(BasePipelineStage):
     def _source_artifact(self, artifact_name):
         pass
 
-    def _yield_artifacts(self, *args, **kwargs):
-        return self._artifact_source.yield_artifacts()
+    def _yield_artifacts(self):
+        pass
 
     def _validate_config(self, config):
         """
@@ -226,7 +199,7 @@ class ExecutorPipelineStage(BasePipelineStage):
     def _source_artifact(self, artifact_name):
         pass
 
-    def _yield_artifacts(self, input_artifacts=None):
+    def _yield_artifacts(self):
         pass
 
     def _validate_config(self, config):

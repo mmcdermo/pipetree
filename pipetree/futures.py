@@ -71,17 +71,12 @@ class InputFuture(object):
         """
         Await the production of artifacts from all associated futures
         """
-        print("AWAITING ARTIFACTS MSIR FOR STAGE "+self._stage_name)
         while True:
-            print("Charlie")
             yield from asyncio.sleep(1)
-            print("Charlie2")
             with self._lock:
                 if self._futures_created is True:
                     break
 
-        print("FUTURES WERE CREATED AND STUFF!!!!")
-        print(self._associated_futures)
         results = []
         for future in self._associated_futures:
             x = yield from future
